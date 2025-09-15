@@ -1,0 +1,18 @@
+# Exclude non-code files from GitHub language detection
+*.md linguist-detectable=false
+*.go linguist-detectable=true
+*.js linguist-detectable=false
+*.html linguist-detectable=false
+*.txt linguist-detectable=false
+*.ps1 linguist-detectable=false
+*.sh linguist-detectable=false
+*.yml linguist-detectable=false
+*.yaml linguist-detectable=false
+*.json linguist-detectable=false
+*.mod linguist-detectable=false
+*.sum linguist-detectable=false
+*.gitignore linguist-detectable=false
+*.gitattributes linguist-detectable=false
+LICENSE linguist-detectable=false
+Makefile linguist-detectable=false
+.env.example linguist-detectable=false
