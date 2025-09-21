@@ -3,142 +3,85 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
+
+	"go_scaffold/internal/templates"
+
+	"github.com/spf13/cobra"
 )
 
-func main() {
-	// 1. Get the project name from the command-line arguments.
-	if len(os.Args) < 2 {
-		log.Fatal("Error: Please provide a project name (e.g., 'go run scaffold.go my-cloud-app')")
-	}
-	projectName := os.Args[1]
-
-	fmt.Printf("🚀 Scaffolding new Go project: %s\n", projectName)
-
-	// 2. Define the directory structure based on Go best practices.
-	// This structure separates concerns and makes the project easy to navigate.
-	dirs := []string{
-		"cmd",
-		"internal/api",        // For API handlers/controllers
-		"internal/service",    // For business logic
-		"internal/repository", // For database interaction
-		"internal/domain",     // For your core models/structs
-		"pkg",                 // For public libraries (if any)
-		"configs",             // For configuration files
-		"web/templates",       // For server-side HTML templates
-		"scripts",             // For helper scripts (build, deploy, etc.)
-	}
-
-	for _, dir := range dirs {
-		fullPath := filepath.Join(projectName, dir)
-		if err := createDir(fullPath); err != nil {
-			log.Fatalf("Failed to create directory %s: %v", fullPath, err)
-		}
-	}
-
-	// 3. Define the initial files to create.
-	files := map[string]string{
-		"cmd/main.go": `package main
-
-import (
-	"fmt"
-	"log"
-	"net/http"
-)
+var registry = templates.NewTemplateRegistry()
 
 func main() {
-	fmt.Println("Server is starting on :8080...")
-	// Example of a simple handler
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Hello, World!")
-	})
+	var rootCmd = &cobra.Command{
+		Use:   "go_scaffold",
+		Short: "A powerful command-line tool for scaffolding new Go projects",
+		Long: `Go Scaffold Tool
 
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("Could not start server: %s\n", err)
+A powerful command-line tool for scaffolding new Go projects with multiple templates
+based on popular Go project setups.
+
+Available templates:
+- full: Full-stack web application with API, services, and templates
+- cli: Command-line interface tool
+- api: REST API server
+- lib: Go library/package`,
+	}
+
+	// Add subcommands for each template
+	rootCmd.AddCommand(createTemplateCommand("full", "Create a full-stack web application"))
+	rootCmd.AddCommand(createTemplateCommand("cli", "Create a command-line interface tool"))
+	rootCmd.AddCommand(createTemplateCommand("api", "Create a REST API server"))
+	rootCmd.AddCommand(createTemplateCommand("lib", "Create a Go library/package"))
+
+	// Add list command
+	var listCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List available templates",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("Available templates:")
+			for _, name := range registry.ListTemplates() {
+				template, _ := registry.GetTemplateInfo(name)
+				fmt.Printf("  %s: %s\n", name, template.Description())
+			}
+		},
+	}
+	rootCmd.AddCommand(listCmd)
+
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal(err)
 	}
 }
-`,
-		".gitignore": `# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
 
-# Test binary, built with 'go test -c'
-*.test
+func createTemplateCommand(templateName, description string) *cobra.Command {
+	return &cobra.Command{
+		Use:   fmt.Sprintf("%s [project-name]", templateName),
+		Short: description,
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			projectName := args[0]
 
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
+			template, err := registry.GetTemplate(templateName)
+			if err != nil {
+				log.Fatal(err)
+			}
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+			if err := templates.CreateProject(template, projectName); err != nil {
+				log.Fatal(err)
+			}
 
-# Go workspace file
-go.work
-`,
-		"README.md": fmt.Sprintf("# %s\n\n_Project created on: %s_\n\n## Description\n\n(Your project description here)\n\n## Getting Started\n\n1.  **Install Dependencies:**\n\n    `go mod tidy`\n\n2.  **Run the application:**\n\n    `go run cmd/main.go`\n", strings.ToTitle(projectName), "2025-09-12"),
-		"configs/config.yaml": `server:
-  port: 8080
-
-database:
-  host: "localhost"
-  port: 5432
-  user: "postgres"
-  password: "password"
-  dbname: "yourdb"
-`,
+			// Print template-specific next steps
+			printNextSteps(templateName, projectName)
+		},
 	}
-
-	for path, content := range files {
-		fullPath := filepath.Join(projectName, path)
-		if err := createFile(fullPath, content); err != nil {
-			log.Fatalf("Failed to create file %s: %v", fullPath, err)
-		}
-	}
-
-	// 4. Initialize the Go module for the new project.
-	// This is a crucial step for managing dependencies.
-	fmt.Println("▶️  Running 'go mod init'...")
-	cmd := exec.Command("go", "mod", "init", projectName)
-	cmd.Dir = projectName // Run the command inside the new project directory
-	if output, err := cmd.CombinedOutput(); err != nil {
-		log.Fatalf("Failed to run 'go mod init': %s\n%v", string(output), err)
-	}
-
-	// 5. Final success message with next steps.
-	fmt.Println("\n✅ Project scaffolding complete!")
-	fmt.Println("📂 Your new project is ready in the '" + projectName + "' directory.")
-	fmt.Println("\nNext Steps:")
-	fmt.Printf("1. Change into the new directory: cd %s\n", projectName)
-	fmt.Println("2. Install dependencies: go mod tidy")
-	fmt.Println("3. Start the server: go run cmd/main.go")
 }
 
-// createDir creates a directory if it doesn't already exist.
-func createDir(path string) error {
-	if err := os.MkdirAll(path, os.ModePerm); err != nil {
-		return fmt.Errorf("could not create directory %s: %w", path, err)
+func printNextSteps(templateName, projectName string) {
+	switch templateName {
+	case "full", "api":
+		fmt.Println("3. Start the server: go run cmd/main.go")
+	case "cli":
+		fmt.Println("3. Run the CLI: go run cmd/main.go --help")
+	case "lib":
+		fmt.Println("3. Use the library in your Go projects")
 	}
-	fmt.Printf("✔️  Created directory: %s\n", path)
-	return nil
-}
-
-// createFile creates a new file with the given content.
-func createFile(path string, content string) error {
-	file, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("could not create file %s: %w", path, err)
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(content)
-	if err != nil {
-		return fmt.Errorf("could not write to file %s: %w", path, err)
-	}
-	fmt.Printf("✔️  Created file:      %s\n", path)
-	return nil
 }
